@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIF Maker - Web Tools</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="../../styles/main.css" rel="stylesheet">
+    <link href="../../styles/theme.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <div id="header"></div>
+
+    <main class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h1 class="card-title text-center mb-4">
+                            <i class="fas fa-film me-2"></i>GIF Maker
+                        </h1>
+                        <div class="text-center mb-4">
+                            <p class="lead">Create animated GIFs from your images</p>
+                        </div>
+
+                        <div class="upload-area p-4 text-center border rounded mb-4" id="dropZone">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h4>Drag & Drop Images Here</h4>
+                            <p class="text-muted">or</p>
+                            <input type="file" id="fileInput" accept="image/*" multiple class="d-none">
+                            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                Choose Files
+                            </button>
+                        </div>
+
+                        <div id="previewArea" class="d-none">
+                            <h4 class="mb-3">Selected Images</h4>
+                            <div id="imageList" class="row g-3"></div>
+
+                            <div class="mt-4">
+                                <h4>GIF Settings</h4>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="frameDelay" class="form-label">Frame Delay (ms)</label>
+                                            <input type="number" class="form-control" id="frameDelay" value="500" min="100" max="2000">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="loopCount" class="form-label">Loop Count</label>
+                                            <input type="number" class="form-control" id="loopCount" value="0" min="0">
+                                            <small class="text-muted">0 = infinite</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button class="btn btn-success" id="createGifBtn">
+                                    <i class="fas fa-film me-2"></i>Create GIF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <div id="footer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="../../js/main.js"></script>
+    <script>
+        // Load header and footer
+        fetch('../../components/header.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('header').innerHTML = data;
+            });
+
+        fetch('../../components/footer.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('footer').innerHTML = data;
+            });
+
+        // GIF creation functionality
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewArea = document.getElementById('previewArea');
+        const imageList = document.getElementById('imageList');
+        const frameDelay = document.getElementById('frameDelay');
+        const loopCount = document.getElementById('loopCount');
+        const createGifBtn = document.getElementById('createGifBtn');
+
+        let selectedFiles = [];
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-primary');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-primary');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary');
+            const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        });
+
+        function handleFiles(files) {
+            selectedFiles = files;
+            previewArea.classList.remove('d-none');
+            imageList.innerHTML = '';
+
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-4';
+                    col.innerHTML = `
+                        <div class="card">
+                            <img src="${e.target.result}" class="card-img-top" alt="Preview">
+                            <div class="card-body">
+                                <p class="card-text">${file.name}</p>
+                                <p class="card-text text-muted">${formatFileSize(file.size)}</p>
+                            </div>
+                        </div>
+                    `;
+                    imageList.appendChild(col);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        createGifBtn.addEventListener('click', async () => {
+            if (selectedFiles.length < 2) {
+                alert('Please select at least 2 images to create a GIF');
+                return;
+            }
+
+            const gif = new GIF({
+                workers: 2,
+                quality: 10,
+                width: 800,
+                height: 600,
+                workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
+            });
+
+            for (const file of selectedFiles) {
+                const img = await loadImage(file);
+                gif.addFrame(img, {
+                    delay: parseInt(frameDelay.value),
+                    copy: true
+                });
+            }
+
+            gif.on('finished', function(blob) {
+                const gifFile = new File([blob], 'animated.gif', {
+                    type: 'image/gif',
+                    lastModified: Date.now()
+                });
+                downloadFile(gifFile);
+            });
+
+            gif.render();
+        });
+
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function downloadFile(file) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(file);
+            link.download = file.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Compressor - Web Tools</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="../../styles/main.css" rel="stylesheet">
+    <link href="../../styles/theme.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <div id="header"></div>
+
+    <main class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h1 class="card-title text-center mb-4">
+                            <i class="fas fa-compress me-2"></i>Image Compressor
+                        </h1>
+                        <div class="text-center mb-4">
+                            <p class="lead">Compress your images without losing quality</p>
+                        </div>
+
+                        <div class="upload-area p-4 text-center border rounded mb-4" id="dropZone">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h4>Drag & Drop Images Here</h4>
+                            <p class="text-muted">or</p>
+                            <input type="file" id="fileInput" accept="image/*" multiple class="d-none">
+                            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                Choose Files
+                            </button>
+                        </div>
+
+                        <div id="previewArea" class="d-none">
+                            <h4 class="mb-3">Selected Images</h4>
+                            <div id="imageList" class="row g-3"></div>
+                            <div class="text-center mt-4">
+                                <button class="btn btn-success" id="compressBtn">
+                                    <i class="fas fa-compress me-2"></i>Compress Images
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="compressionOptions" class="mt-4 d-none">
+                            <h4>Compression Options</h4>
+                            <div class="mb-3">
+                                <label for="quality" class="form-label">Quality (0-100)</label>
+                                <input type="range" class="form-range" id="quality" min="0" max="100" value="80">
+                                <div class="d-flex justify-content-between">
+                                    <span>Lower Quality</span>
+                                    <span id="qualityValue">80%</span>
+                                    <span>Higher Quality</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <div id="footer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../../js/main.js"></script>
+    <script>
+        // Load header and footer
+        fetch('../../components/header.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('header').innerHTML = data;
+            });
+
+        fetch('../../components/footer.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('footer').innerHTML = data;
+            });
+
+        // Image compression functionality
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const previewArea = document.getElementById('previewArea');
+        const imageList = document.getElementById('imageList');
+        const compressBtn = document.getElementById('compressBtn');
+        const compressionOptions = document.getElementById('compressionOptions');
+        const qualitySlider = document.getElementById('quality');
+        const qualityValue = document.getElementById('qualityValue');
+
+        let selectedFiles = [];
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-primary');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-primary');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary');
+            const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        });
+
+        qualitySlider.addEventListener('input', (e) => {
+            qualityValue.textContent = `${e.target.value}%`;
+        });
+
+        function handleFiles(files) {
+            selectedFiles = files;
+            previewArea.classList.remove('d-none');
+            compressionOptions.classList.remove('d-none');
+            imageList.innerHTML = '';
+
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-4';
+                    col.innerHTML = `
+                        <div class="card">
+                            <img src="${e.target.result}" class="card-img-top" alt="Preview">
+                            <div class="card-body">
+                                <p class="card-text">${file.name}</p>
+                                <p class="card-text text-muted">${formatFileSize(file.size)}</p>
+                            </div>
+                        </div>
+                    `;
+                    imageList.appendChild(col);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        compressBtn.addEventListener('click', async () => {
+            const quality = qualitySlider.value / 100;
+            
+            for (const file of selectedFiles) {
+                try {
+                    const compressedFile = await compressImage(file, quality);
+                    downloadFile(compressedFile);
+                } catch (error) {
+                    console.error('Error compressing image:', error);
+                    alert('Error compressing image. Please try again.');
+                }
+            }
+        });
+
+        function compressImage(file, quality) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        
+                        ctx.drawImage(img, 0, 0);
+                        
+                        canvas.toBlob((blob) => {
+                            const compressedFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            resolve(compressedFile);
+                        }, 'image/jpeg', quality);
+                    };
+                    img.onerror = reject;
+                };
+                reader.onerror = reject;
+            });
+        }
+
+        function downloadFile(file) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(file);
+            link.download = `compressed_${file.name}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html> 
